@@ -23,6 +23,7 @@ let settings = {
      lightIntensity: 1.0,
      mainColor: { r: 1.0, g: 1.0, b: 1.0},
      lightSourceColor: {r: 1.0, g: 1.0, b: 1.0},
+     shininessFactor: 32.0,
 }
 
 let gui = new GUI({title: "Lighting settings"});
@@ -36,6 +37,7 @@ gui.add(settings, "lightSourceYPos", -10.0, 10.0).onChange((val) => {
 gui.add(settings, "lightSourceZPos", -10.0, 10.0).onChange((val) => {
      lightSourcePos.z = val;
 });
+gui.add(settings, "shininessFactor", 1.0, 256);
 gui.addColor(settings, "mainColor");
 gui.addColor(settings, "lightSourceColor");
 document.body.appendChild( renderer.domElement );
@@ -54,6 +56,7 @@ let lightDependentShaderMat = new THREE.ShaderMaterial({
           uCameraPos: {value: camera.position},
           uMainColor: {value: settings.mainColor},
           uLightSourceColor: {value: settings.lightSourceColor},
+          uShininess: {value: settings.shininessFactor},
      },
      transparent: true,
 })
@@ -73,6 +76,7 @@ function animate() {
      lightDependentShaderMat.uniforms.uCameraPos.value = camera.position;
      lightDependentShaderMat.uniforms.uMainColor.value = settings.mainColor;
      lightDependentShaderMat.uniforms.uLightSourceColor.value = settings.lightSourceColor;
+     lightDependentShaderMat.uniforms.uShininess.value = settings.shininessFactor;
      renderer.render( scene, camera ); 
 
      controls.update();
@@ -98,7 +102,7 @@ function vertexShader() {
                vNormal = normalize(normal);
                vLightDir = normalize(vUv - uLightSourcePos);
                vViewDir = normalize(vUv - uCameraPos);
-               vReflectDir = reflect(-vLightDir, vNormal);
+               vReflectDir = reflect(vLightDir, vNormal);
 
                vec4 modelViewPosition = modelViewMatrix * vec4(vUv,1.0);
                gl_Position = projectionMatrix * modelViewPosition;
@@ -118,13 +122,15 @@ function fragmentShader() {
           uniform float uLightIntensity;
           uniform vec3 uMainColor;
           uniform vec3 uLightSourceColor;
+          uniform float uShininess;
    
           void main() {
      
-               float diffuseScalar = min(dot(vLightDir, vNormal),0.0);
-               vec3 diffuseColor = uMainColor * -diffuseScalar * uLightIntensity;
-               vec3 specular = vec3(max(dot(vViewDir, vReflectDir), 0.0));
-               gl_FragColor = vec4(diffuseColor + specular, 1.0);
+               float diffuseScalar = abs(min(dot(vLightDir, vNormal),0.0));
+               vec3 diffuseColor = uMainColor * diffuseScalar * uLightIntensity;
+               float specularScalar = pow(abs(min(dot(vViewDir, vReflectDir),0.0)), uShininess);
+               vec3 specularColor = specularScalar * uLightSourceColor * uLightIntensity;
+               gl_FragColor = vec4(diffuseColor + specularColor, 1.0);
           }
      `
 }
