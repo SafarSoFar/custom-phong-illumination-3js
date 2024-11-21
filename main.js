@@ -23,11 +23,15 @@ let settings = {
      lightIntensity: 1.0,
      mainColor: { r: 1.0, g: 1.0, b: 1.0},
      lightSourceColor: {r: 1.0, g: 1.0, b: 1.0},
+     ambientLightColor: {r: 0.1, g: 0.1, b: 0.1},
+     ambientLightIntensity: 0.5,
      shininessFactor: 32.0,
+     shininessIntensity: 1.0,
 }
 
 let gui = new GUI({title: "Lighting settings"});
 gui.add(settings, "lightIntensity", 0.0, 1.0);
+gui.add(settings, "ambientLightIntensity", 0.0, 1.0);
 gui.add(settings, "lightSourceXPos", -10.0, 10.0).onChange((val) => {
      lightSourcePos.x = val;
 })
@@ -37,9 +41,13 @@ gui.add(settings, "lightSourceYPos", -10.0, 10.0).onChange((val) => {
 gui.add(settings, "lightSourceZPos", -10.0, 10.0).onChange((val) => {
      lightSourcePos.z = val;
 });
+
 gui.add(settings, "shininessFactor", 1.0, 256);
+gui.add(settings, "shininessIntensity", 0.0, 1.0);
+
 gui.addColor(settings, "mainColor");
 gui.addColor(settings, "lightSourceColor");
+gui.addColor(settings, "ambientLightColor");
 document.body.appendChild( renderer.domElement );
 
 
@@ -55,8 +63,11 @@ let lightDependentShaderMat = new THREE.ShaderMaterial({
           uLightIntensity: {value: settings.lightIntensity},
           uCameraPos: {value: camera.position},
           uMainColor: {value: settings.mainColor},
+          uAmbientLightColor: {value: settings.ambientLightColor},
+          uAmbientLightIntensity: {value: settings.ambientLightIntensity},
           uLightSourceColor: {value: settings.lightSourceColor},
-          uShininess: {value: settings.shininessFactor},
+          uShininessFactor: {value: settings.shininessFactor},
+          uShininessIntensity: {value: settings.shininessIntensity},
      },
      transparent: true,
 })
@@ -75,8 +86,12 @@ function animate() {
      lightDependentShaderMat.uniforms.uLightIntensity.value = settings.lightIntensity;
      lightDependentShaderMat.uniforms.uCameraPos.value = camera.position;
      lightDependentShaderMat.uniforms.uMainColor.value = settings.mainColor;
+     lightDependentShaderMat.uniforms.uAmbientLightColor.value = settings.ambientLightColor;
+     lightDependentShaderMat.uniforms.uAmbientLightIntensity.value = settings.ambientLightIntensity;
      lightDependentShaderMat.uniforms.uLightSourceColor.value = settings.lightSourceColor;
-     lightDependentShaderMat.uniforms.uShininess.value = settings.shininessFactor;
+     lightDependentShaderMat.uniforms.uShininessFactor.value = settings.shininessFactor;
+     lightDependentShaderMat.uniforms.uShininessIntensity.value = settings.shininessIntensity;
+
      renderer.render( scene, camera ); 
 
      controls.update();
@@ -119,18 +134,24 @@ function fragmentShader() {
           varying vec3 vViewDir;
           varying vec3 vReflectDir;
 
-          uniform float uLightIntensity;
           uniform vec3 uMainColor;
+          uniform vec3 uAmbientLightColor;
           uniform vec3 uLightSourceColor;
-          uniform float uShininess;
+
+          uniform float uAmbientLightIntensity;
+          uniform float uShininessFactor;
+          uniform float uShininessIntensity;
+          uniform float uLightIntensity;
    
           void main() {
      
                float diffuseScalar = abs(min(dot(vLightDir, vNormal),0.0));
-               vec3 diffuseColor = uMainColor * diffuseScalar * uLightIntensity;
-               float specularScalar = pow(abs(min(dot(vViewDir, vReflectDir),0.0)), uShininess);
-               vec3 specularColor = specularScalar * uLightSourceColor * uLightIntensity;
-               gl_FragColor = vec4(diffuseColor + specularColor, 1.0);
+               float specularScalar = pow(abs(min(dot(vViewDir, vReflectDir),0.0)), uShininessFactor);
+
+               vec3 ambientColor = uAmbientLightColor * uAmbientLightIntensity;
+               vec3 diffuseColor = uLightSourceColor * diffuseScalar * uLightIntensity;
+               vec3 specularColor = specularScalar * uLightSourceColor * uLightIntensity * uShininessIntensity;
+               gl_FragColor = vec4((diffuseColor + specularColor + ambientColor) * uMainColor, 1.0);
           }
      `
 }
