@@ -1,169 +1,50 @@
 import * as THREE from 'three';
-import { OrbitControls, ThreeMFLoader, UnrealBloomPass } from 'three/examples/jsm/Addons.js';
+import { OrbitControls, UnrealBloomPass } from 'three/examples/jsm/Addons.js';
 import { clamp, normalize, randFloat, randInt } from 'three/src/math/MathUtils.js';
-import {GUI} from 'lil-gui';
-import { cameraPosition } from 'three/webgpu';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'; 
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'; 
 
+
+// function randomInt(min, max){
+//      return Math.floor(Math.random() * (max-min+1)+min);
+// }
 
 
 const scene = new THREE.Scene(); 
 const renderer = new THREE.WebGLRenderer(); 
 
+// renderer.setClearColor(0x010328);
 
+
+// scene.add(new THREE.AmbientLight(0xffffff));
+scene.add(new THREE.DirectionalLight(0xffffff));
+
+// renderer.setClearColor(0xffffff);
 renderer.setSize( window.innerWidth, window.innerHeight ); 
 
 const camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 ); 
 
 const controls = new OrbitControls(camera, renderer.domElement );
 
-let settings = {
-     lightSourceXPos: 3.0,
-     lightSourceYPos: 5.0,
-     lightSourceZPos: 3.0,
-     lightIntensity: 1.0,
-     mainColor: { r: 1.0, g: 1.0, b: 1.0},
-     lightSourceColor: {r: 1.0, g: 1.0, b: 1.0},
-     ambientLightColor: {r: 0.1, g: 0.1, b: 0.1},
-     ambientLightIntensity: 0.5,
-     shininessFactor: 32.0,
-     shininessIntensity: 1.0,
-}
 
-let gui = new GUI({title: "Lighting settings"});
-gui.add(settings, "lightIntensity", 0.0, 1.0);
-gui.add(settings, "ambientLightIntensity", 0.0, 1.0);
-gui.add(settings, "lightSourceXPos", -10.0, 10.0).onChange((val) => {
-     lightSourcePos.x = val;
-})
-gui.add(settings, "lightSourceYPos", -10.0, 10.0).onChange((val) => {
-     lightSourcePos.y = val;
-});
-gui.add(settings, "lightSourceZPos", -10.0, 10.0).onChange((val) => {
-     lightSourcePos.z = val;
-});
-
-gui.add(settings, "shininessFactor", 1.0, 256);
-gui.add(settings, "shininessIntensity", 0.0, 1.0);
-
-gui.addColor(settings, "mainColor");
-gui.addColor(settings, "lightSourceColor");
-gui.addColor(settings, "ambientLightColor");
+// by default no ascii effect
 document.body.appendChild( renderer.domElement );
 
-
-let lightSourcePos = new THREE.Vector3(3.0,5.0,3.0);
-let directionalLightHelper = new THREE.Mesh(new THREE.SphereGeometry(), new THREE.MeshBasicMaterial({color: 0xffffff}));
-scene.add(directionalLightHelper);
-
-let lightDependentShaderMat = new THREE.ShaderMaterial({
-     vertexShader: vertexShader(),
-     fragmentShader: fragmentShader(),
-     uniforms: {
-          uLightSourcePos: {value: lightSourcePos},
-          uLightIntensity: {value: settings.lightIntensity},
-          uCameraPos: {value: camera.position},
-          uMainColor: {value: settings.mainColor},
-          uAmbientLightColor: {value: settings.ambientLightColor},
-          uAmbientLightIntensity: {value: settings.ambientLightIntensity},
-          uLightSourceColor: {value: settings.lightSourceColor},
-          uShininessFactor: {value: settings.shininessFactor},
-          uShininessIntensity: {value: settings.shininessIntensity},
-     },
-     transparent: true,
-})
-
-let sphere = new THREE.Mesh(new THREE.SphereGeometry(), lightDependentShaderMat);
-scene.add(sphere);
+// let directionalLight = new THREE.DirectionalLight(0xffffff, 100);
+// scene.add(directionalLight);
 
 
-camera.position.z = 5;
 
 
-function animate() {
+const composer = new EffectComposer(renderer);
 
-     directionalLightHelper.position.copy(lightSourcePos);
-     lightDependentShaderMat.uniforms.uLightSourcePos.value = lightSourcePos;
-     lightDependentShaderMat.uniforms.uLightIntensity.value = settings.lightIntensity;
-     lightDependentShaderMat.uniforms.uCameraPos.value = camera.position;
-     lightDependentShaderMat.uniforms.uMainColor.value = settings.mainColor;
-     lightDependentShaderMat.uniforms.uAmbientLightColor.value = settings.ambientLightColor;
-     lightDependentShaderMat.uniforms.uAmbientLightIntensity.value = settings.ambientLightIntensity;
-     lightDependentShaderMat.uniforms.uLightSourceColor.value = settings.lightSourceColor;
-     lightDependentShaderMat.uniforms.uShininessFactor.value = settings.shininessFactor;
-     lightDependentShaderMat.uniforms.uShininessIntensity.value = settings.shininessIntensity;
+const renderPass = new RenderPass( scene, camera ); 
+composer.addPass( renderPass ); 
+const glowPass = new UnrealBloomPass();
+composer.addPass( glowPass ); 
 
-     renderer.render( scene, camera ); 
 
-     controls.update();
 
-} 
-
-renderer.setAnimationLoop( animate );
-
-function vertexShader() {
-     return `
-          varying vec3 vUv; 
-          varying vec3 vNormal;
-          varying vec3 vLightDir;
-          varying vec3 vViewDir;
-          varying vec3 vReflectDir;
-
-          uniform vec3 uLightSourcePos;
-          uniform vec3 uCameraPos;
-          
-          void main() {
-
-               vUv = position; 
-               vNormal = normalize(normal);
-               vLightDir = normalize(vUv - uLightSourcePos);
-               vViewDir = normalize(vUv - uCameraPos);
-               vReflectDir = reflect(vLightDir, vNormal);
-
-               vec4 modelViewPosition = modelViewMatrix * vec4(vUv,1.0);
-               gl_Position = projectionMatrix * modelViewPosition;
-          }
-     `
-}
-   
-function fragmentShader() {
-     return `
-
-          varying vec3 vUv;
-          varying vec3 vNormal;
-          varying vec3 vLightDir;
-          varying vec3 vViewDir;
-          varying vec3 vReflectDir;
-
-          uniform vec3 uMainColor;
-          uniform vec3 uAmbientLightColor;
-          uniform vec3 uLightSourceColor;
-
-          uniform float uAmbientLightIntensity;
-          uniform float uShininessFactor;
-          uniform float uShininessIntensity;
-          uniform float uLightIntensity;
-   
-          void main() {
-     
-               float diffuseScalar = abs(min(dot(vLightDir, vNormal),0.0));
-               float specularScalar = pow(abs(min(dot(vViewDir, vReflectDir),0.0)), uShininessFactor);
-
-               vec3 ambientColor = uAmbientLightColor * uAmbientLightIntensity;
-               vec3 diffuseColor = uLightSourceColor * diffuseScalar * uLightIntensity;
-               vec3 specularColor = specularScalar * uLightSourceColor * uLightIntensity * uShininessIntensity;
-               gl_FragColor = vec4((diffuseColor + specularColor + ambientColor) * uMainColor, 1.0);
-          }
-     `
-}
-
-document.addEventListener("keydown", onDocumentKeyDown, false);
-function onDocumentKeyDown(event) {
-     
-    var keyCode = event.which;
-    if (keyCode == 72) { // 'h' ascii value
-        gui.show(gui._hidden);
-    }
-};
 
 window.addEventListener("resize", onWindowResize,false);
 
@@ -179,3 +60,221 @@ function onWindowResize() {
 }
 
 
+
+
+
+
+
+
+
+
+camera.position.z = 1;
+// camera.rotateZ(Math.PI/2);
+
+let counter = 0;
+
+let cubes = [];
+let geo = new THREE.SphereGeometry(0.5,36,36);
+for(let i = 0; i < 1; i++){
+     let cube = new THREE.Mesh(geo, new THREE.ShaderMaterial({
+          vertexShader: vertexShader(),
+          fragmentShader: fragmentShader(),
+          // wireframe: true,
+          uniforms: {
+               counter: {type: 'float', value: 0},
+          },
+     }));
+     scene.add(cube);
+     cubes.push(cube);
+}
+
+function animate() {
+
+     counter += 0.1;
+     cubes[0].material.uniforms.counter.value = counter;
+     
+     
+     // composer.render();
+     renderer.render( scene, camera ); 
+
+     controls.update();
+
+} 
+
+renderer.setAnimationLoop( animate );
+
+function vertexShader() {
+     return `
+     varying vec3 vNormal; 
+       varying vec3 vUv; 
+     uniform float counter;
+
+
+     vec4 permute(vec4 x){return mod(((x*34.0)+1.0)*x, 289.0);}
+        vec4 taylorInvSqrt(vec4 r){return 1.79284291400159 - 0.85373472095314 * r;}
+        vec3 fade(vec3 t) {return t*t*t*(t*(t*6.0-15.0)+10.0);}
+
+        float cnoise(vec3 P){
+        vec3 Pi0 = floor(P); // Integer part for indexing
+        vec3 Pi1 = Pi0 + vec3(1.0); // Integer part + 1
+        Pi0 = mod(Pi0, 289.0);
+        Pi1 = mod(Pi1, 289.0);
+        vec3 Pf0 = fract(P); // Fractional part for interpolation
+        vec3 Pf1 = Pf0 - vec3(1.0); // Fractional part - 1.0
+        vec4 ix = vec4(Pi0.x, Pi1.x, Pi0.x, Pi1.x);
+        vec4 iy = vec4(Pi0.yy, Pi1.yy);
+        vec4 iz0 = Pi0.zzzz;
+        vec4 iz1 = Pi1.zzzz;
+
+        vec4 ixy = permute(permute(ix) + iy);
+        vec4 ixy0 = permute(ixy + iz0);
+        vec4 ixy1 = permute(ixy + iz1);
+
+        vec4 gx0 = ixy0 / 7.0;
+        vec4 gy0 = fract(floor(gx0) / 7.0) - 0.5;
+        gx0 = fract(gx0);
+        vec4 gz0 = vec4(0.5) - abs(gx0) - abs(gy0);
+        vec4 sz0 = step(gz0, vec4(0.0));
+        gx0 -= sz0 * (step(0.0, gx0) - 0.5);
+        gy0 -= sz0 * (step(0.0, gy0) - 0.5);
+
+        vec4 gx1 = ixy1 / 7.0;
+        vec4 gy1 = fract(floor(gx1) / 7.0) - 0.5;
+        gx1 = fract(gx1);
+        vec4 gz1 = vec4(0.5) - abs(gx1) - abs(gy1);
+        vec4 sz1 = step(gz1, vec4(0.0));
+        gx1 -= sz1 * (step(0.0, gx1) - 0.5);
+        gy1 -= sz1 * (step(0.0, gy1) - 0.5);
+
+        vec3 g000 = vec3(gx0.x,gy0.x,gz0.x);
+        vec3 g100 = vec3(gx0.y,gy0.y,gz0.y);
+        vec3 g010 = vec3(gx0.z,gy0.z,gz0.z);
+        vec3 g110 = vec3(gx0.w,gy0.w,gz0.w);
+        vec3 g001 = vec3(gx1.x,gy1.x,gz1.x);
+        vec3 g101 = vec3(gx1.y,gy1.y,gz1.y);
+        vec3 g011 = vec3(gx1.z,gy1.z,gz1.z);
+        vec3 g111 = vec3(gx1.w,gy1.w,gz1.w);
+
+        vec4 norm0 = taylorInvSqrt(vec4(dot(g000, g000), dot(g010, g010), dot(g100, g100), dot(g110, g110)));
+        g000 *= norm0.x;
+        g010 *= norm0.y;
+        g100 *= norm0.z;
+        g110 *= norm0.w;
+        vec4 norm1 = taylorInvSqrt(vec4(dot(g001, g001), dot(g011, g011), dot(g101, g101), dot(g111, g111)));
+        g001 *= norm1.x;
+        g011 *= norm1.y;
+        g101 *= norm1.z;
+        g111 *= norm1.w;
+
+        float n000 = dot(g000, Pf0);
+        float n100 = dot(g100, vec3(Pf1.x, Pf0.yz));
+        float n010 = dot(g010, vec3(Pf0.x, Pf1.y, Pf0.z));
+        float n110 = dot(g110, vec3(Pf1.xy, Pf0.z));
+        float n001 = dot(g001, vec3(Pf0.xy, Pf1.z));
+        float n101 = dot(g101, vec3(Pf1.x, Pf0.y, Pf1.z));
+        float n011 = dot(g011, vec3(Pf0.x, Pf1.yz));
+        float n111 = dot(g111, Pf1);
+
+        vec3 fade_xyz = fade(Pf0);
+        vec4 n_z = mix(vec4(n000, n100, n010, n110), vec4(n001, n101, n011, n111), fade_xyz.z);
+        vec2 n_yz = mix(n_z.xy, n_z.zw, fade_xyz.y);
+        float n_xyz = mix(n_yz.x, n_yz.y, fade_xyz.x); 
+        return 2.2 * n_xyz;
+        }
+
+       void main() {
+     float displacement = 0.1 * cnoise(20.0 * position + sin(counter));
+          vNormal = normalize(normal);
+         vUv = position;
+         vec3 pos = vNormal * displacement + position; 
+         vec4 modelViewPosition = modelViewMatrix * vec4(pos,1.0);
+         gl_Position = projectionMatrix * modelViewPosition;
+       }
+     `
+}
+   
+function fragmentShader() {
+     return `
+
+          varying vec3 vNormal; 
+         varying vec3 vUv;
+         uniform float counter;
+
+         vec4 permute(vec4 x){return mod(((x*34.0)+1.0)*x, 289.0);}
+        vec4 taylorInvSqrt(vec4 r){return 1.79284291400159 - 0.85373472095314 * r;}
+        vec3 fade(vec3 t) {return t*t*t*(t*(t*6.0-15.0)+10.0);}
+
+        float cnoise(vec3 P){
+        vec3 Pi0 = floor(P); // Integer part for indexing
+        vec3 Pi1 = Pi0 + vec3(1.0); // Integer part + 1
+        Pi0 = mod(Pi0, 289.0);
+        Pi1 = mod(Pi1, 289.0);
+        vec3 Pf0 = fract(P); // Fractional part for interpolation
+        vec3 Pf1 = Pf0 - vec3(1.0); // Fractional part - 1.0
+        vec4 ix = vec4(Pi0.x, Pi1.x, Pi0.x, Pi1.x);
+        vec4 iy = vec4(Pi0.yy, Pi1.yy);
+        vec4 iz0 = Pi0.zzzz;
+        vec4 iz1 = Pi1.zzzz;
+
+        vec4 ixy = permute(permute(ix) + iy);
+        vec4 ixy0 = permute(ixy + iz0);
+        vec4 ixy1 = permute(ixy + iz1);
+
+        vec4 gx0 = ixy0 / 7.0;
+        vec4 gy0 = fract(floor(gx0) / 7.0) - 0.5;
+        gx0 = fract(gx0);
+        vec4 gz0 = vec4(0.5) - abs(gx0) - abs(gy0);
+        vec4 sz0 = step(gz0, vec4(0.0));
+        gx0 -= sz0 * (step(0.0, gx0) - 0.5);
+        gy0 -= sz0 * (step(0.0, gy0) - 0.5);
+
+        vec4 gx1 = ixy1 / 7.0;
+        vec4 gy1 = fract(floor(gx1) / 7.0) - 0.5;
+        gx1 = fract(gx1);
+        vec4 gz1 = vec4(0.5) - abs(gx1) - abs(gy1);
+        vec4 sz1 = step(gz1, vec4(0.0));
+        gx1 -= sz1 * (step(0.0, gx1) - 0.5);
+        gy1 -= sz1 * (step(0.0, gy1) - 0.5);
+
+        vec3 g000 = vec3(gx0.x,gy0.x,gz0.x);
+        vec3 g100 = vec3(gx0.y,gy0.y,gz0.y);
+        vec3 g010 = vec3(gx0.z,gy0.z,gz0.z);
+        vec3 g110 = vec3(gx0.w,gy0.w,gz0.w);
+        vec3 g001 = vec3(gx1.x,gy1.x,gz1.x);
+        vec3 g101 = vec3(gx1.y,gy1.y,gz1.y);
+        vec3 g011 = vec3(gx1.z,gy1.z,gz1.z);
+        vec3 g111 = vec3(gx1.w,gy1.w,gz1.w);
+
+        vec4 norm0 = taylorInvSqrt(vec4(dot(g000, g000), dot(g010, g010), dot(g100, g100), dot(g110, g110)));
+        g000 *= norm0.x;
+        g010 *= norm0.y;
+        g100 *= norm0.z;
+        g110 *= norm0.w;
+        vec4 norm1 = taylorInvSqrt(vec4(dot(g001, g001), dot(g011, g011), dot(g101, g101), dot(g111, g111)));
+        g001 *= norm1.x;
+        g011 *= norm1.y;
+        g101 *= norm1.z;
+        g111 *= norm1.w;
+
+        float n000 = dot(g000, Pf0);
+        float n100 = dot(g100, vec3(Pf1.x, Pf0.yz));
+        float n010 = dot(g010, vec3(Pf0.x, Pf1.y, Pf0.z));
+        float n110 = dot(g110, vec3(Pf1.xy, Pf0.z));
+        float n001 = dot(g001, vec3(Pf0.xy, Pf1.z));
+        float n101 = dot(g101, vec3(Pf1.x, Pf0.y, Pf1.z));
+        float n011 = dot(g011, vec3(Pf0.x, Pf1.yz));
+        float n111 = dot(g111, Pf1);
+
+        vec3 fade_xyz = fade(Pf0);
+        vec4 n_z = mix(vec4(n000, n100, n010, n110), vec4(n001, n101, n011, n111), fade_xyz.z);
+        vec2 n_yz = mix(n_z.xy, n_z.zw, fade_xyz.y);
+        float n_xyz = mix(n_yz.x, n_yz.y, fade_xyz.x); 
+        return 2.2 * n_xyz;
+        }
+   
+         void main() {
+               float n = 15.0 * cnoise(vNormal + sin(counter));
+               gl_FragColor = vec4(mix(vec3(0.0), vec3(1.0), n),1.0);
+         }
+     `
+}
